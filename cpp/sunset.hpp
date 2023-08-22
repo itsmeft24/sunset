@@ -9,8 +9,6 @@
 #include <Windows.h>
 #include <detours/detours.h>
 
-#include "HiOctane_Wrapper.hpp"
-
 #include "relocate_code.hpp"
 
 #define DefineReplacementHook(name) \

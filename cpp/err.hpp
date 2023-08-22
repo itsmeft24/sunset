@@ -104,8 +104,7 @@ public:
     }
 };
 #else
-template<class T>
-using stx::Result;
-template<class T>
-using stx::Option;
+template <typename T, typename Error>
+using Result = stx::Result<T, Error>;
+using stx::Result, stx::Option, stx::None, stx::Some;
 #endif
