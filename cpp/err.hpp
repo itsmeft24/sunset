@@ -106,5 +106,5 @@ public:
 #else
 template <typename T, typename Error>
 using Result = stx::Result<T, Error>;
-using stx::Result, stx::Option, stx::None, stx::Some;
+using stx::Option, stx::None, stx::Some;
 #endif
