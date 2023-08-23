@@ -41,10 +41,6 @@ namespace sunset {
             return std::make_pair(old_perm, success);
         }
 
-        template <typename T> inline T* allocate_code(size_t count) {
-            return reinterpret_cast<T*>(VirtualAlloc(NULL, sizeof(T) * count, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
-        }
-
         class JitMemory {
         public:
             std::uint8_t* data;
@@ -119,6 +115,11 @@ namespace sunset {
         inline void inline_replace(T1 src, T2 dst, std::size_t size) {
             write_nop(src, size);
             write_call(src, dst);
+        }
+        template <typename T1, typename std::enable_if_t<std::is_pointer_v<T1>>* = nullptr, typename T2, typename std::enable_if_t<std::is_pointer_v<T2>>* = nullptr>
+        inline void inline_replace_jump(T1 src, T2 dst, std::size_t size) {
+            write_nop(src, size);
+            write_jmp(src, dst);
         }
     };
 
@@ -263,9 +264,9 @@ namespace sunset {
                 // Ensure original function has the trampoline area nop'd out.
                 write_jmp(reinterpret_cast<void*>(ptr), jit_area_ptr - (11 + relocated.size() + 5));
                 utils::set_permission(reinterpret_cast<void*>(ptr), original_code_len, old_perm);
-				
-				std::lock_guard<std::mutex> guard(JIT_MEMORY_LOCK);
-				JIT_MEMORY.push_back(std::move(jit_area));
+
+                std::lock_guard<std::mutex> guard(JIT_MEMORY_LOCK);
+                JIT_MEMORY.push_back(std::move(jit_area));
             }
         };
     };
