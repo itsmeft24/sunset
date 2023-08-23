@@ -6,9 +6,27 @@ use windows_sys::Win32::System::Threading::GetCurrentThread;
 
 use crate::detail::*;
 
+pub use sunset_macro::*;
+
 pub mod detail;
 pub mod legacy;
 pub mod utils;
+
+#[macro_export]
+macro_rules! install_hooks {
+    (
+        $(
+            $hook_paths:path
+        ),*
+        $(,)?
+    ) => {
+        $(
+            $crate::install_hook!(
+                $hook_paths
+            );
+        )*
+    };
+}
 
 pub unsafe fn write_jmp(src: *mut u8, dst: *mut u8) -> Option<()> {
     let relative_address = (dst as u32) - (src as u32) - 5;
