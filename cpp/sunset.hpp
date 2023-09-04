@@ -45,6 +45,13 @@ namespace sunset {
         public:
             std::uint8_t* data;
             std::size_t len;
+	private:
+            inline void destroy_impl() {
+                if (data != nullptr) {
+                    VirtualFree(reinterpret_cast<void*>(data), 0, MEM_RELEASE);
+                    data = nullptr;
+                }
+            }
         public:
             inline JitMemory(std::size_t size) {
                 data = reinterpret_cast<std::uint8_t*>(VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
@@ -53,12 +60,14 @@ namespace sunset {
             JitMemory(const JitMemory&) = delete;
             JitMemory& operator=(const JitMemory&) = delete;
             inline JitMemory(JitMemory&& other) noexcept {
+                destroy_impl();
                 data = other.data;
                 other.data = nullptr;
                 len = other.len;
                 other.len = 0;
             }
             inline JitMemory& operator=(JitMemory&& other) noexcept {
+                destroy_impl();
                 data = other.data;
                 other.data = nullptr;
                 len = other.len;
@@ -67,10 +76,7 @@ namespace sunset {
             }
             // All these hoops to jump through just for psuedo-destructive moves...
             inline ~JitMemory() {
-                if (data != nullptr) {
-                    VirtualFree(reinterpret_cast<void*>(data), 0, MEM_RELEASE);
-                    data = nullptr;
-                }
+                destroy_impl();
             }
         };
     };
