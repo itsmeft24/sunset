@@ -2,7 +2,7 @@ use std::{ffi::c_void, mem::MaybeUninit};
 
 use zydis::{
     ffi::{
-        DecodedOperandKind, Request, ZydisEncoderDecodedInstructionToEncoderRequest,
+        DecodedOperandKind, EncoderRequest, ZydisEncoderDecodedInstructionToEncoderRequest,
         ZydisEncoderEncodeInstructionAbsolute,
     },
     *,
@@ -70,7 +70,7 @@ pub fn relocate_code(
 
         unsafe {
             // Convert the decoded instruction to an encoder request.
-            let mut encoder_request = MaybeUninit::<Request>::zeroed().assume_init();
+            let mut encoder_request = MaybeUninit::<EncoderRequest>::zeroed().assume_init();
 
             let status = ZydisEncoderDecodedInstructionToEncoderRequest(
                 &*instr,
