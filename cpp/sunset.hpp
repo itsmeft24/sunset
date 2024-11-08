@@ -50,6 +50,7 @@ namespace sunset {
                 if (data != nullptr) {
                     VirtualFree(reinterpret_cast<void*>(data), 0, MEM_RELEASE);
                     data = nullptr;
+                    len = 0;
                 }
             }
         public:
@@ -57,21 +58,23 @@ namespace sunset {
                 data = reinterpret_cast<std::uint8_t*>(VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
                 len = size;
             }
+            JitMemory() = delete;
             JitMemory(const JitMemory&) = delete;
             JitMemory& operator=(const JitMemory&) = delete;
-            inline JitMemory(JitMemory&& other) noexcept {
-                destroy_impl();
+            inline JitMemory(JitMemory&& other) noexcept : data(nullptr), len(0) {
                 data = other.data;
-                other.data = nullptr;
                 len = other.len;
+                other.data = nullptr;
                 other.len = 0;
             }
             inline JitMemory& operator=(JitMemory&& other) noexcept {
-                destroy_impl();
-                data = other.data;
-                other.data = nullptr;
-                len = other.len;
-                other.len = 0;
+                if (this != &other) {
+                    destroy_impl();
+                    data = other.data;
+                    len = other.len;
+                    other.data = nullptr;
+                    other.len = 0;
+                }
                 return *this;
             }
             // All these hoops to jump through just for psuedo-destructive moves...
@@ -99,7 +102,7 @@ namespace sunset {
         *(uintptr_t*)((uintptr_t)src + 1) = relativeAddress;
     }
 
-    template <typename T1, typename std::enable_if_t<std::is_pointer_v<T1>>* = nullptr, typename T2, typename std::enable_if_t<std::is_pointer_v<T2>>* = nullptr>
+    template <typename T1, typename std::enable_if_t<std::is_pointer_v<T1>>* = nullptr, typename T2, typename std::enable_if_t<std::is_integral_v<T2>>* = nullptr>
     inline void write_push(T1 src, T2 dst) {
         utils::set_permission(src, 5, utils::Perm::ExecuteReadWrite);
         *(std::uint8_t*)src = 0x68;
