@@ -25,6 +25,7 @@
 #pragma once
 #include <iostream>
 #include <format>
+#include <stdexcept>
 
 template<class E>
 class Err {
@@ -75,10 +76,10 @@ public:
         }
         else {
             if constexpr (std::is_default_constructible_v<std::formatter<E>>) {
-                throw std::exception(std::format("\'called `Result::unwrap()` on an `Err` value: {}\'", error_value).c_str());
+                throw std::runtime_error(std::format("\'called `Result::unwrap()` on an `Err` value: {}\'", error_value).c_str());
             } else 
             {
-                throw std::exception("\'called `Result::unwrap()` on an `Err` value: ()\'");
+                throw std::runtime_error("\'called `Result::unwrap()` on an `Err` value: ()\'");
             }
         }
     }
