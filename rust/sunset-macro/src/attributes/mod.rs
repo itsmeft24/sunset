@@ -1,7 +1,8 @@
-use syn::parse::{ParseStream, Parse};
-use syn::{Token, parenthesized, token};
+use syn::parse::{Parse, ParseStream};
+use syn::{parenthesized, token, Token};
 mod kw {
     syn::custom_keyword!(inline);
+    syn::custom_keyword!(extended_inline);
     syn::custom_keyword!(offset);
 }
 
@@ -9,18 +10,27 @@ mod kw {
 pub struct HookAttrs {
     pub offset: Option<syn::Expr>,
     pub inline: bool,
+    pub extended_inline: bool,
 }
 
 fn merge(attr1: HookAttrs, attr2: HookAttrs) -> HookAttrs {
     let (
-        HookAttrs { offset: o1, inline: i1 },
-        HookAttrs { offset: o2, inline: i2 },
+        HookAttrs {
+            offset: o1,
+            inline: i1,
+            extended_inline: ei1,
+        },
+        HookAttrs {
+            offset: o2,
+            inline: i2,
+            extended_inline: ei2,
+        },
     ) = (attr1, attr2);
-
 
     HookAttrs {
         offset: o1.or(o2),
-        inline: i1 || i2
+        inline: i1 || i2,
+        extended_inline: ei1 || ei2,
     }
 }
 
@@ -29,7 +39,7 @@ impl Parse for HookAttrs {
         let look = input.lookahead1();
         let attr = if look.peek(kw::offset) {
             let MetaItem::<kw::offset, syn::Expr> { item: offset, .. } = input.parse()?;
-            
+
             let mut a = HookAttrs::default();
             a.offset = Some(offset);
             a
@@ -37,6 +47,11 @@ impl Parse for HookAttrs {
             let _: kw::inline = input.parse()?;
             let mut a = HookAttrs::default();
             a.inline = true;
+            a
+        } else if look.peek(kw::extended_inline) {
+            let _: kw::extended_inline = input.parse()?;
+            let mut a = HookAttrs::default();
+            a.extended_inline = true;
             a
         } else {
             return Err(look.error());
@@ -57,6 +72,7 @@ impl Parse for HookAttrs {
 
 #[derive(Debug, Clone)]
 pub struct MetaItem<Keyword: Parse, Item: Parse> {
+    #[allow(dead_code)]
     pub ident: Keyword,
     pub item: Item,
 }
@@ -73,9 +89,6 @@ impl<Keyword: Parse, Item: Parse> Parse for MetaItem<Keyword, Item> {
             input.parse()?
         };
 
-        Ok(Self {
-            ident,
-            item
-        })
+        Ok(Self { ident, item })
     }
 }

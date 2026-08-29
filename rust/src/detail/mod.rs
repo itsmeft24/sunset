@@ -1,3 +1,6 @@
+mod backup_registers;
+pub use backup_registers::*;
+
 use std::{ffi::c_void, mem::MaybeUninit};
 
 use zydis::{
@@ -18,12 +21,24 @@ pub enum CodeRelocError {
     FailedEncodeInstr,
 }
 
+#[cfg(target_arch = "x86_64")]
+const INSTRUCTION_POINTER: Register = Register::RIP;
+
+#[cfg(target_arch = "x86")]
+const INSTRUCTION_POINTER: Register = Register::EIP;
+
+pub const MINIMUM_OVERWRITE: usize = 5;
+
 pub fn relocate_code(
     source: usize,
     source_size: usize,
     dest: usize,
 ) -> std::result::Result<Vec<u8>, CodeRelocError> {
+    #[cfg(target_arch = "x86_64")]
+    let decoder = Decoder::new(MachineMode::LONG_64, StackWidth::_64).unwrap();
+    #[cfg(target_arch = "x86")]
     let decoder = Decoder::new(MachineMode::LONG_COMPAT_32, StackWidth::_32).unwrap();
+
     let source_slice = unsafe { std::slice::from_raw_parts(source as *const u8, source_size) };
 
     let mut source_offset = 0;
@@ -40,22 +55,37 @@ pub fn relocate_code(
             let original_operand = operand.clone();
             if let DecodedOperandKind::Imm(ref mut info) = operand.kind {
                 if info.is_relative {
+                    // A hacky solution to get the size of the original instruction. We use this to fix the new IP-relative address.
+                    let absolute_address_minus_instruction_size =
+                        source + source_offset + (info.value as usize);
                     if let Ok(absolute_address) = instr
                         .calc_absolute_address((source + source_offset) as u64, &original_operand)
                     {
-                        info.is_relative = false;
-                        info.value = absolute_address;
+                        let estimated_instruction_size = (absolute_address as isize)
+                            - absolute_address_minus_instruction_size as isize;
+                        // Here, we calculate a new relative address from the absolute address Zydis gives us, and the absolute estimated original instruction size.
+                        let relative_address = absolute_address as isize
+                            - (dest + dest_offset) as isize
+                            - estimated_instruction_size;
+                        info.value = relative_address as u64;
                     } else {
                         return Err(CodeRelocError::FailedAbsoluteAddressCalc);
                     }
                 }
             } else if let DecodedOperandKind::Mem(ref mut info) = operand.kind {
-                if info.base == Register::EIP {
+                if info.base == INSTRUCTION_POINTER {
+                    let absolute_address_minus_instruction_size =
+                        source + source_offset + (info.disp.displacement as usize);
                     if let Ok(absolute_address) = instr
                         .calc_absolute_address((source + source_offset) as u64, &original_operand)
                     {
-                        info.base = Register::NONE;
-                        info.disp.displacement = absolute_address as i64;
+                        let estimated_instruction_size = (absolute_address as isize)
+                            - absolute_address_minus_instruction_size as isize;
+                        // Here, we calculate a new relative address from the absolute address Zydis gives us, and the absolute estimated original instruction size.
+                        let relative_address = absolute_address as isize
+                            - (dest + dest_offset) as isize
+                            - estimated_instruction_size; // FIXME
+                        info.disp.displacement = relative_address as i64;
                     } else {
                         return Err(CodeRelocError::FailedAbsoluteAddressCalc);
                     }
@@ -108,7 +138,11 @@ pub fn relocate_code(
 }
 
 pub fn get_instruction_len(ptr: *const u8) -> usize {
+    #[cfg(target_arch = "x86_64")]
+    let decoder = Decoder::new(MachineMode::LONG_64, StackWidth::_64).unwrap();
+    #[cfg(target_arch = "x86")]
     let decoder = Decoder::new(MachineMode::LONG_COMPAT_32, StackWidth::_32).unwrap();
+
     let source_slice = unsafe { std::slice::from_raw_parts(ptr, MAX_INSTRUCTION_LENGTH) };
 
     if let Ok(Some(instr)) = decoder.decode_first::<AllOperands>(source_slice) {
@@ -119,7 +153,11 @@ pub fn get_instruction_len(ptr: *const u8) -> usize {
 }
 
 pub fn find_suitable_backup_size(base: *const u8) -> (usize, usize) {
+    #[cfg(target_arch = "x86_64")]
+    let decoder = Decoder::new(MachineMode::LONG_64, StackWidth::_64).unwrap();
+    #[cfg(target_arch = "x86")]
     let decoder = Decoder::new(MachineMode::LONG_COMPAT_32, StackWidth::_32).unwrap();
+
     let source_slice = unsafe { std::slice::from_raw_parts(base, MAX_INSTRUCTION_LENGTH) };
 
     let mut offset = 0;
@@ -127,7 +165,7 @@ pub fn find_suitable_backup_size(base: *const u8) -> (usize, usize) {
 
     for instr_info in decoder.decode_all::<AllOperands>(source_slice, base as u64) {
         let (_ip, _raw_bytes, instr) = instr_info.unwrap();
-        if offset >= 5 {
+        if offset >= MINIMUM_OVERWRITE {
             break;
         }
         offset += instr.length as usize;

@@ -1,5 +1,3 @@
-#![feature(abi_thiscall)]
-
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens};
@@ -92,10 +90,12 @@ pub fn hook(attrs: TokenStream, input: TokenStream) -> TokenStream {
     let mut output = TokenStream2::new();
 
     // force cdecl if inline
-    if attrs.inline {
+    if attrs.inline || attrs.extended_inline {
         mod_fn.sig.abi = Some(syn::Abi {
-            extern_token: syn::token::Extern { span: Span::call_site() },
-            name: Some(syn::LitStr::new("cdecl", Span::call_site()))
+            extern_token: syn::token::Extern {
+                span: Span::call_site(),
+            },
+            name: Some(syn::LitStr::new("cdecl", Span::call_site())),
         });
     }
 
@@ -104,13 +104,10 @@ pub fn hook(attrs: TokenStream, input: TokenStream) -> TokenStream {
     let args_tokens = mod_fn.sig.inputs.iter().map(remove_mut);
     let return_tokens = mod_fn.sig.output.to_token_stream();
 
-    let _orig_fn = quote::format_ident!(
-        "{}_sunset_internal_original_fn",
-        mod_fn.sig.ident
-    );
+    let _orig_fn = quote::format_ident!("{}_sunset_internal_original_fn", mod_fn.sig.ident);
 
     // allow original!
-    if !attrs.inline {
+    if !attrs.inline && !attrs.extended_inline {
         let orig_stmt: Stmt = parse_quote! {
             #[allow(unused_macros)]
             macro_rules! original {
@@ -123,7 +120,7 @@ pub fn hook(attrs: TokenStream, input: TokenStream) -> TokenStream {
         };
         mod_fn.block.stmts.insert(0, orig_stmt);
         let orig_stmt: Stmt = parse_quote! {
-            #[allow(unused_macros)] 
+            #[allow(unused_macros)]
             macro_rules! call_original {
                 ($($args:expr),* $(,)?) => {
                     original!()($($args),*)
@@ -152,5 +149,6 @@ pub fn install_hook(input: TokenStream) -> TokenStream {
 
     quote!(
         #path();
-    ).into()
+    )
+    .into()
 }
